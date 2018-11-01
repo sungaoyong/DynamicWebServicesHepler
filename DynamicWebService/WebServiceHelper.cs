@@ -67,6 +67,36 @@ namespace DynamicWebService
             return _soapEnveloper.GetSoapBody(ReadXmlResponse(request));
         }
 
+        /// <summary>
+        /// 通过SOAP的wsdl文件访问
+        /// </summary>
+        /// <param name="xml"></param>
+        /// <param name="methodName"></param>
+        /// <param name="pars"></param>
+        /// <returns></returns>
+        public string AnalysisSoapXml(String xml, String methodName, Dictionary<string, object> pars)
+        {
+            var key = xml + "/" + methodName;
+            try
+            {
+                if (!_soapNameSpace.ContainsKey(key))
+                {
+                    BaseXmlStream stream = new FileXmlStream();
+                    WsdlAnalysis analysis = new WsdlAnalysis(stream);
+                    var wsdl = analysis.Analysize(xml, methodName);
+                    _soapNameSpace.Add(key, wsdl);
+                }
+            }catch(Exception ex)
+            {
+                return ex.Message;
+            }
+            finally
+            {
+                
+            }
+            return "Ok";
+        }
+
         #region Soap请求
 
         /// <summary>

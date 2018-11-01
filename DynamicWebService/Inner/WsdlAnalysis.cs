@@ -97,6 +97,7 @@ namespace DynamicWebService.Inner
 
         private void SetParamNamespace(XContainer container, string @namespace, string msg, Dictionary<string, ComplexType> paramNamespace)
         {
+            bool IssameNamespace = false;
             if (!typeDocument.ContainsKey(@namespace))
             {
                 var tgtNs = container.XPathSelectElement(@".").Attribute("targetNamespace").Value;
@@ -104,65 +105,78 @@ namespace DynamicWebService.Inner
                 {
                     var import = container.XPathSelectElement(@"./import[@namespace='" + @namespace + @"']");
 
-                    var url = import.Attribute("schemaLocation").Value;
-                    var imp = _baseStream.GetXDocument(url);
-
-                    //imp.Descendants().Attributes().Where(a => a.IsNamespaceDeclaration && a.Name != "import").Remove();
-
-                    foreach (var element in imp.Descendants())
+                    if (import != null)
                     {
-                        element.Name = element.Name.LocalName;
-                    }
+                        var url = import.Attribute("schemaLocation").Value;
+                        var imp = _baseStream.GetXDocument(url);
 
-                    typeDocument.Add(@namespace, imp.XPathSelectElement(@"/schema"));
-                }
-                else
-                {
-                    typeDocument.Add(@namespace, container);
-                }
-            }
+                        //imp.Descendants().Attributes().Where(a => a.IsNamespaceDeclaration && a.Name != "import").Remove();
 
-            //这个有问题暂时只支持一层complexType
-            var msgElm = typeDocument[@namespace].XPathSelectElement(@"./element[@name='" + msg + @"']");
+                        foreach (var element in imp.Descendants())
+                        {
+                            element.Name = element.Name.LocalName;
+                        }
 
-            IEnumerable<XElement> childs = new List<XElement>();
-
-            //ComplexType 可能存在element SimpleType 不存在，所以不处理简单类型（SimpleType）命名空间
-            if (msgElm.Attribute("type") != null)
-            {
-                if (!primitive.ContainsKey(msgElm.Attribute("type").Value.LocalName()))
-                {
-                    childs = typeDocument[@namespace].XPathSelectElements(@"./complexType[@name='" + msgElm.Attribute("type").Value.LocalName() + @"']//element");
-                }
-            }
-            else
-            {
-                childs = msgElm.XPathSelectElements(@"./complexType//element");
-            }
-            foreach (var child in childs)
-            {
-                if (child.Attribute("type") != null)
-                {
-                    if (primitive.ContainsKey(child.Attribute("type").Value.LocalName()))
-                    {
-                        paramNamespace.Add(child.Attribute("name").Value, new ComplexType { Name = child.Attribute("name").Value, Namespace = @namespace });
+                        typeDocument.Add(tgtNs, imp.XPathSelectElement(@"/schema"));
                     }
                     else
                     {
-                        if (child.Attributes().Any(a => a.Name.NamespaceName == @"http://www.w3.org/2000/xmlns/"))
-                        {
-                            var tarNs = child.Attributes().First(a => a.Name.NamespaceName == @"http://www.w3.org/2000/xmlns/").Value;
-                            var childParamNs = new Dictionary<string, ComplexType>();
-                            paramNamespace.Add(child.Attribute("name").Value, new ComplexType { Name = child.Attribute("name").Value, Namespace = @namespace, Child = childParamNs });
-                            SetParamNamespace(typeDocument[@namespace], tarNs, child.Attribute("type").Value.LocalName(), childParamNs);
-                        }
+                        
+                        typeDocument.Add(tgtNs, container);
                     }
                 }
-                if (child.Attribute("ref") != null)
+                else
                 {
-                    var childParamNs = new Dictionary<string, ComplexType>();
-                    paramNamespace.Add(child.Attribute("ref").Value.LocalName(), new ComplexType { Name = child.Attribute("ref").Value.LocalName(), Namespace = @namespace, Child = childParamNs });
-                    SetParamNamespace(typeDocument[@namespace], @namespace, child.Attribute("ref").Value.LocalName(), childParamNs);
+                    IssameNamespace = true;
+                    typeDocument.Add(@namespace, container);
+                }
+            }
+            if (IssameNamespace)
+            {
+                //这个有问题暂时只支持一层complexType
+                var msgElm = typeDocument[@namespace].XPathSelectElement(@"./element[@name='" + msg + @"']");
+                if (msgElm != null)
+                {
+                    IEnumerable<XElement> childs = new List<XElement>();
+
+                    //ComplexType 可能存在element SimpleType 不存在，所以不处理简单类型（SimpleType）命名空间
+                    if (msgElm.Attribute("type") != null)
+                    {
+                        if (!primitive.ContainsKey(msgElm.Attribute("type").Value.LocalName()))
+                        {
+                            childs = typeDocument[@namespace].XPathSelectElements(@"./complexType[@name='" + msgElm.Attribute("type").Value.LocalName() + @"']//element");
+                        }
+                    }
+                    else
+                    {
+                        childs = msgElm.XPathSelectElements(@"./complexType//element");
+                    }
+                    foreach (var child in childs)
+                    {
+                        if (child.Attribute("type") != null)
+                        {
+                            if (primitive.ContainsKey(child.Attribute("type").Value.LocalName()))
+                            {
+                                paramNamespace.Add(child.Attribute("name").Value, new ComplexType { Name = child.Attribute("name").Value, Namespace = @namespace });
+                            }
+                            else
+                            {
+                                if (child.Attributes().Any(a => a.Name.NamespaceName == @"http://www.w3.org/2000/xmlns/"))
+                                {
+                                    var tarNs = child.Attributes().First(a => a.Name.NamespaceName == @"http://www.w3.org/2000/xmlns/").Value;
+                                    var childParamNs = new Dictionary<string, ComplexType>();
+                                    paramNamespace.Add(child.Attribute("name").Value, new ComplexType { Name = child.Attribute("name").Value, Namespace = @namespace, Child = childParamNs });
+                                    SetParamNamespace(typeDocument[@namespace], tarNs, child.Attribute("type").Value.LocalName(), childParamNs);
+                                }
+                            }
+                        }
+                        if (child.Attribute("ref") != null)
+                        {
+                            var childParamNs = new Dictionary<string, ComplexType>();
+                            paramNamespace.Add(child.Attribute("ref").Value.LocalName(), new ComplexType { Name = child.Attribute("ref").Value.LocalName(), Namespace = @namespace, Child = childParamNs });
+                            SetParamNamespace(typeDocument[@namespace], @namespace, child.Attribute("ref").Value.LocalName(), childParamNs);
+                        }
+                    }
                 }
             }
         }
